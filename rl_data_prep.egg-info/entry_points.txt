@@ -1,0 +1,2 @@
+[console_scripts]
+rl-data-prep = rl_data_prep.cli:main

@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rl-data-prep"
+version = "0.1.0"
+requires-python = ">=3.9"
+dependencies = [
+    "eval-anything @ git+https://github.com/Gouti629/eval-anything.git",
+]
+
+[project.optional-dependencies]
+vllm = ["vllm>=0.6.0"]
+
+[project.scripts]
+rl-data-prep = "rl_data_prep.cli:main"

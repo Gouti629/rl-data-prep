@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: rl-data-prep
+Version: 0.1.0
+Requires-Python: >=3.9
+Requires-Dist: eval-anything @ git+https://github.com/Gouti629/eval-anything.git
+Provides-Extra: vllm
+Requires-Dist: vllm>=0.6.0; extra == "vllm"

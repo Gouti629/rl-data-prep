@@ -1,0 +1,4 @@
+eval-anything @ git+https://github.com/Gouti629/eval-anything.git
+
+[vllm]
+vllm>=0.6.0

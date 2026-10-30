@@ -32,7 +32,22 @@ rl-data-prep rlvr \
   --output-dir ./filtered
 ```
 
-Output: `./filtered/gsm8k/filtered.jsonl` and `./filtered/gsm8k/summary.json`
+Output:
+
+```
+./filtered/Llama-3.1-8B-Instruct_gsm8k_0.1_0.9/
+├── all_results.jsonl   # every example with its pass_rate
+├── filtered.jsonl      # only examples with pass_rate in [0.1, 0.9]
+└── summary.json
+```
+
+`all_results.jsonl` has every example with a `pass_rate` column, so you can re-filter offline without re-running generation:
+
+```python
+import pandas as pd
+df = pd.read_json("all_results.jsonl", lines=True)
+hard = df[df.pass_rate.between(0.0, 0.3)]
+```
 
 Each JSONL record contains:
 
@@ -63,9 +78,7 @@ rl-data-prep distill \
   --output-dir ./filtered
 ```
 
-Output: `./filtered/math/distill_filtered.jsonl` and `./filtered/math/summary.json`
-
-The teacher runs first, then is unloaded to free GPU memory before the student runs on teacher-passed prompts only.
+Output follows the same structure — `all_results.jsonl` (all teacher-passed examples with student pass rates), `distill_filtered.jsonl`, and `summary.json`. The teacher runs first, then is unloaded to free GPU memory before the student runs on teacher-passed prompts only.
 
 ### Common options
 

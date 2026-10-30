@@ -84,7 +84,7 @@ class TestFilterForRLVR:
             output_dir=str(tmp_path),
         )
 
-        jsonl_path = os.path.join(str(tmp_path), "test_eval", "filtered.jsonl")
+        jsonl_path = os.path.join(str(tmp_path), "test-model_test_eval_0.2_0.8", "filtered.jsonl")
         assert os.path.exists(jsonl_path)
         assert result_path == jsonl_path
 
@@ -138,7 +138,7 @@ class TestFilterForRLVR:
             output_dir=str(tmp_path),
         )
 
-        jsonl_path = os.path.join(str(tmp_path), "test_eval", "filtered.jsonl")
+        jsonl_path = os.path.join(str(tmp_path), "m_test_eval_0.25_0.75", "filtered.jsonl")
         with open(jsonl_path) as f:
             records = [json.loads(line) for line in f]
 
@@ -178,7 +178,7 @@ class TestFilterForRLVR:
             output_dir=str(tmp_path),
         )
 
-        jsonl_path = os.path.join(str(tmp_path), "test_eval", "filtered.jsonl")
+        jsonl_path = os.path.join(str(tmp_path), "m_test_eval_0.5_1.0", "filtered.jsonl")
         with open(jsonl_path) as f:
             records = [json.loads(line) for line in f]
 
@@ -215,7 +215,7 @@ class TestFilterForRLVR:
             output_dir=str(tmp_path),
         )
 
-        summary_path = os.path.join(str(tmp_path), "test_eval", "summary.json")
+        summary_path = os.path.join(str(tmp_path), "m_test_eval_0.1_0.9", "summary.json")
         with open(summary_path) as f:
             summary = json.load(f)
 
@@ -256,11 +256,72 @@ class TestFilterForRLVR:
             output_dir=str(tmp_path),
         )
 
-        jsonl_path = os.path.join(str(tmp_path), "test_eval", "filtered.jsonl")
+        jsonl_path = os.path.join(str(tmp_path), "m_test_eval_0.0_1.0", "filtered.jsonl")
         with open(jsonl_path) as f:
             rec = json.loads(f.readline())
 
         assert rec["extra_field"] == "extra_value"
+
+
+# ---------------------------------------------------------------------------
+# all_results.jsonl
+# ---------------------------------------------------------------------------
+
+class TestAllResults:
+    @patch("rl_data_prep.core._free_gpu_memory")
+    @patch("rl_data_prep.core._make_generate_fn")
+    @patch("rl_data_prep.core._load_model_for_backend")
+    @patch("rl_data_prep.core.GenericEval")
+    @patch("rl_data_prep.core._resolve_eval_config")
+    def test_all_results_has_every_example(self, mock_resolve, mock_eval_cls, mock_load,
+                                           mock_make_gen, mock_free, tmp_path):
+        """all_results.jsonl contains every example, not just filtered ones."""
+        mock_resolve.return_value = {
+            "name": "test_eval", "dataset": "test",
+            "question_field": "q", "answer_field": "a",
+        }
+
+        eval_obj = MagicMock()
+        eval_obj.name = "test_eval"
+        mock_eval_cls.return_value = eval_obj
+
+        examples = [_make_example(i) for i in range(3)]
+        eval_obj.load_data.return_value = examples
+        eval_obj.format_prompt.side_effect = lambda ex, tok: f"prompt_{ex['example_id']}"
+        eval_obj.score.side_effect = _mock_score
+        mock_load.return_value = (MagicMock(), MagicMock())
+
+        # pass_rates: 0.0, 0.5, 1.0
+        correct_map = {"test_0": 0, "test_1": 2, "test_2": 4}
+        mock_make_gen.return_value = _make_gen_fn(correct_map)
+
+        from rl_data_prep.core import filter_for_rlvr
+
+        filter_for_rlvr(
+            model="m", eval_config="x", rollouts=ROLLOUTS,
+            min_pass_rate=0.5, max_pass_rate=0.5,
+            output_dir=str(tmp_path),
+        )
+
+        base = os.path.join(str(tmp_path), "m_test_eval_0.5_0.5")
+
+        # filtered.jsonl has only 1 (pass_rate == 0.5)
+        with open(os.path.join(base, "filtered.jsonl")) as f:
+            filtered = [json.loads(l) for l in f]
+        assert len(filtered) == 1
+
+        # all_results.jsonl has all 3 with pass_rate column
+        with open(os.path.join(base, "all_results.jsonl")) as f:
+            all_recs = [json.loads(l) for l in f]
+        assert len(all_recs) == 3
+
+        pass_rates = {r["example_id"]: r["pass_rate"] for r in all_recs}
+        assert pass_rates == {"test_0": 0.0, "test_1": 0.5, "test_2": 1.0}
+
+        for rec in all_recs:
+            assert "pass_rate" in rec
+            assert "question" in rec
+            assert "scores" in rec
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +376,7 @@ class TestFilterForDistillation:
             output_dir=str(tmp_path),
         )
 
-        jsonl_path = os.path.join(str(tmp_path), "test_eval", "distill_filtered.jsonl")
+        jsonl_path = os.path.join(str(tmp_path), "student_teacher_test_eval_0.5_0.3", "distill_filtered.jsonl")
         assert os.path.exists(jsonl_path)
         assert result_path == jsonl_path
 
@@ -376,7 +437,7 @@ class TestFilterForDistillation:
             rollouts=ROLLOUTS, output_dir=str(tmp_path),
         )
 
-        jsonl_path = os.path.join(str(tmp_path), "test_eval", "distill_filtered.jsonl")
+        jsonl_path = os.path.join(str(tmp_path), "s_t_test_eval_0.5_1.0", "distill_filtered.jsonl")
         with open(jsonl_path) as f:
             records = [json.loads(line) for line in f]
 
@@ -423,7 +484,7 @@ class TestFilterForDistillation:
             rollouts=ROLLOUTS, output_dir=str(tmp_path),
         )
 
-        summary_path = os.path.join(str(tmp_path), "test_eval", "summary.json")
+        summary_path = os.path.join(str(tmp_path), "s_t_test_eval_0.5_0.5", "summary.json")
         with open(summary_path) as f:
             summary = json.load(f)
 

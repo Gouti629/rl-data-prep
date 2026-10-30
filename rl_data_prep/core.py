@@ -46,6 +46,10 @@ def _free_gpu_memory():
     gc.collect()
 
 
+def _model_short_name(model_path: str) -> str:
+    return model_path.rstrip("/").split("/")[-1]
+
+
 def _make_serializable(obj: Any) -> Any:
     if isinstance(obj, (str, int, float, bool, type(None))):
         return obj
@@ -140,20 +144,27 @@ def filter_for_rlvr(
         rollouts, batch_size, max_new_tokens, temperature,
     )
 
-    filtered = []
+    all_records = []
     for r in results:
-        if min_pass_rate <= r["pass_rate"] <= max_pass_rate:
-            record = _build_record(
-                r["example"], r["pass_rate"], r["n_correct"], rollouts, r["scores"],
-            )
-            filtered.append(record)
+        record = _build_record(
+            r["example"], r["pass_rate"], r["n_correct"], rollouts, r["scores"],
+        )
+        all_records.append(record)
+
+    filtered = [rec for rec in all_records if min_pass_rate <= rec["pass_rate"] <= max_pass_rate]
 
     print(f"Filtered {len(filtered)}/{len(data)} examples "
           f"(pass_rate in [{min_pass_rate}, {max_pass_rate}])")
 
     eval_name = eval_obj.name
-    out_path = os.path.join(output_dir, eval_name)
+    folder_name = f"{_model_short_name(model)}_{eval_name}_{min_pass_rate}_{max_pass_rate}"
+    out_path = os.path.join(output_dir, folder_name)
     os.makedirs(out_path, exist_ok=True)
+
+    all_path = os.path.join(out_path, "all_results.jsonl")
+    with open(all_path, "w", encoding="utf-8") as f:
+        for rec in all_records:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     jsonl_path = os.path.join(out_path, "filtered.jsonl")
     with open(jsonl_path, "w", encoding="utf-8") as f:
@@ -241,30 +252,41 @@ def filter_for_distillation(
         rollouts, batch_size, max_new_tokens, temperature,
     )
 
+    all_student_records = []
     filtered = []
     for sr in student_results:
         eid = sr["example"]["example_id"]
+        tr = teacher_result_map[eid]
+        record = _build_record(
+            sr["example"], sr["pass_rate"], sr["n_correct"], rollouts, sr["scores"],
+            extra_fields={
+                "teacher_pass_rate": tr["pass_rate"],
+                "teacher_n_correct": tr["n_correct"],
+                "teacher_scores": tr["scores"],
+                "student_pass_rate": sr["pass_rate"],
+                "student_n_correct": sr["n_correct"],
+                "student_scores": sr["scores"],
+            },
+        )
+        all_student_records.append(record)
         if sr["pass_rate"] <= student_max_pass_rate:
-            tr = teacher_result_map[eid]
-            record = _build_record(
-                sr["example"], sr["pass_rate"], sr["n_correct"], rollouts, sr["scores"],
-                extra_fields={
-                    "teacher_pass_rate": tr["pass_rate"],
-                    "teacher_n_correct": tr["n_correct"],
-                    "teacher_scores": tr["scores"],
-                    "student_pass_rate": sr["pass_rate"],
-                    "student_n_correct": sr["n_correct"],
-                    "student_scores": sr["scores"],
-                },
-            )
             filtered.append(record)
 
     print(f"Distillation filtered: {len(filtered)}/{len(teacher_passed_data)} "
           f"(student pass_rate <= {student_max_pass_rate})")
 
     eval_name = eval_obj.name
-    out_path = os.path.join(output_dir, eval_name)
+    folder_name = (
+        f"{_model_short_name(student_model)}_{_model_short_name(teacher_model)}"
+        f"_{eval_name}_{teacher_min_pass_rate}_{student_max_pass_rate}"
+    )
+    out_path = os.path.join(output_dir, folder_name)
     os.makedirs(out_path, exist_ok=True)
+
+    all_path = os.path.join(out_path, "all_results.jsonl")
+    with open(all_path, "w", encoding="utf-8") as f:
+        for rec in all_student_records:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
 
     jsonl_path = os.path.join(out_path, "distill_filtered.jsonl")
     with open(jsonl_path, "w", encoding="utf-8") as f:
